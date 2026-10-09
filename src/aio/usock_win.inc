@@ -952,8 +952,13 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             switch (type) {
             case NN_USOCK_ACTION_ERROR:
                 if (nn_usock_cancel_io (usock) == 0) {
+                    /*  The socket is closed right below and no further event
+                        follows, so this must be the terminal NN_USOCK_ERROR
+                        (as on POSIX). Raising NN_USOCK_SHUTDOWN here leaves
+                        the owner (e.g. sipc in SHUTTING_DOWN) waiting forever
+                        for an ERROR that never comes, leaking it. */
                     nn_fsm_raise(&usock->fsm, &usock->event_error,
-                        NN_USOCK_SHUTDOWN);
+                        NN_USOCK_ERROR);
                     nn_usock_close(usock);
                     usock->state = NN_USOCK_STATE_DONE;
                     return;
@@ -977,7 +982,8 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             if (!nn_worker_op_isidle (&usock->in) ||
                   !nn_worker_op_isidle (&usock->out))
                 return;
-            nn_fsm_raise(&usock->fsm, &usock->event_error, NN_USOCK_SHUTDOWN);
+            /*  Terminal event, see NN_USOCK_ACTION_ERROR in ACTIVE state. */
+            nn_fsm_raise(&usock->fsm, &usock->event_error, NN_USOCK_ERROR);
             nn_usock_close(usock);
             usock->state = NN_USOCK_STATE_DONE;
             return;
