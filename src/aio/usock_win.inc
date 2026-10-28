@@ -688,6 +688,16 @@ static void nn_usock_close (struct nn_usock *self)
     int rc;
     BOOL brc;
 
+    /*  A send may have been in flight when the connection failed or was
+        stopped (e.g. WriteFile failing synchronously, CANCELLING_IO, or
+        STOPPING). No I/O is pending by now, so release the buffer; owners
+        like cipc reuse the usock on reconnect and nn_usock_send asserts
+        it is NULL. */
+    if (self->pipesendbuf) {
+        nn_free (self->pipesendbuf);
+        self->pipesendbuf = NULL;
+    }
+
     if (self->domain == NN_USOCK_WINPIPE) {
         if (self->p == INVALID_HANDLE_VALUE)
             return;
